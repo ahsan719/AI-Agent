@@ -1,3 +1,4 @@
+duckduckgo-search
 langchain
 wikipedia
 langchain-community
