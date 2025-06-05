@@ -46,6 +46,8 @@ def run_agent(query):
     raw_response = agent_executor.invoke({"query": query})
     try:
         structured_response = parser.parse(raw_response.get("output"))
-        return {"result": str(structured_response)}
+        # Ensure the output is parsed correctly and return only the summary
+        return {"result": structured_response.summary}
     except Exception as e:
-        return {"error": str(e), "raw_response": raw_response}
+        # Log the raw response for debugging purposes
+        return {"error": str(e), "raw_response": raw_response.get("output", "No output available")}
