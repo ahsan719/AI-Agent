@@ -5,7 +5,7 @@ from datetime import datetime
 
 def save_to_txt(data, filename: str = "research_output.txt"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # Ensure data is string for writing
+    
     if not isinstance(data, str):
         try:
             import json
