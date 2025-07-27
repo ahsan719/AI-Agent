@@ -11,6 +11,8 @@ class ResearchResponse(BaseModel):
     Soruces: list[str]
     tools_used : list[str]
 
+|#AIAGENT
+
 llm = ChatGroq( model="llama3-8b-8192")
 
 parser = PydanticOutputParser(pydantic_object=ResearchResponse)
