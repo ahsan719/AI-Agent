@@ -41,12 +41,11 @@ agent = create_tool_calling_agent(
     tools=tools
 )
 
-agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
-query = input("What can i help you research? ")
-raw_response = agent_executor.invoke({"query": query})
-
-try:
-    structured_response = parser.parse(raw_response.get("output"))
-    print(structured_response)
-except Exception as e:
-    print("Error parsing response", e, "Raw Response - ", raw_response)
+def run_agent(query):
+    agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+    raw_response = agent_executor.invoke({"query": query})
+    try:
+        structured_response = parser.parse(raw_response.get("output"))
+        return {"result": str(structured_response)}
+    except Exception as e:
+        return {"error": str(e), "raw_response": raw_response}

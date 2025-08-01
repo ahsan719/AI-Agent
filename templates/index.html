@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Research Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            background-color: #f9f9f9;
+            color: #333;
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+        }
+        header {
+            background: #4CAF50;
+            color: white;
+            padding: 1em 0;
+            text-align: center;
+            font-size: 1.5em;
+        }
+        .container {
+            max-width: 800px;
+            margin: 2em auto;
+            padding: 1em;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        input[type="text"] {
+            width: calc(100% - 2em);
+            padding: 0.5em;
+            margin-bottom: 1em;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 0.7em 1.5em;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1em;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <header>AI Research Agent</header>
+    <div class="container">
+        <h2>Ask the AI Research Agent</h2>
+        <input type="text" id="query" placeholder="What can I help you research?">
+        <button onclick="askAgent()">Ask</button>
+        <button onclick="downloadPDF()">Download as PDF</button>
+        <pre id="result">Your results will appear here...</pre>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script>
+        function askAgent() {
+            const query = document.getElementById('query').value;
+            fetch('/ask', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({query})
+            })
+            .then(res => res.json())
+            .then(data => {
+                const resultElement = document.getElementById('result');
+                resultElement.textContent = data.result || data.error;
+            });
+        }
+
+        function downloadPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const resultText = document.getElementById('result').textContent;
+
+            doc.text("AI Research Agent Result", 10, 10);
+            doc.text(resultText, 10, 20);
+            doc.save("result.pdf");
+        }
+    </script>
+</body>
+</html>
