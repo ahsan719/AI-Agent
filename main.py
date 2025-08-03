@@ -13,7 +13,6 @@ class ResearchResponse(BaseModel):
     summary: str
     sources: list[str]
     tools_used: list[str]
-    
 
 llm = ChatGroq(model="llama3-8b-8192")
 parser = PydanticOutputParser(pydantic_object=ResearchResponse)
@@ -24,7 +23,7 @@ prompt = ChatPromptTemplate.from_messages(
             "system",
             """
             You are a research assistant that will help generate a research paper.
-            Answer the user query and use neccessary tools. 
+            Answer the user query and use necessary tools. 
             Wrap the output in this format and provide no other text\n{format_instructions}
             """,
         ),
@@ -46,8 +45,6 @@ def run_agent(query):
     raw_response = agent_executor.invoke({"query": query})
     try:
         structured_response = parser.parse(raw_response.get("output"))
-        # Ensure the output is parsed correctly and return only the summary
-        return {"result": structured_response.summary}
+        return {"result": str(structured_response)}
     except Exception as e:
-        # Log the raw response for debugging purposes
-        return {"error": str(e), "raw_response": raw_response.get("output", "No output available")}
+        return {"error": str(e), "raw_response": raw_response}
