@@ -8,3 +8,4 @@ langchain-openai
 python-dotenv
 pydantic
 langchain-groq
+ddgs
