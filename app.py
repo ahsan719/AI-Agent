@@ -3,7 +3,7 @@ from flask_cors import CORS
 import traceback
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
 # Import agent after Flask app is created
 from main import run_agent
@@ -15,13 +15,16 @@ def index():
 @app.route('/ask', methods=['POST'])
 def ask():
     try:
-        query = request.json.get('query')
+        data = request.json
+        query = data.get('query')
+        depth = data.get('depth', 'detailed')  # Default to detailed
+        
         if not query:
             return jsonify({"error": "No query provided"}), 400
         
-        print(f"[INFO] Received query: {query}")
-        result = run_agent(query)
-        print(f"[INFO] Agent response: {result}")
+        print(f"[INFO] Received query: {query}, depth: {depth}")
+        result = run_agent(query, depth)
+        print(f"[INFO] Agent response received")
         return jsonify(result)
     except Exception as e:
         error_msg = str(e)
