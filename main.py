@@ -20,190 +20,124 @@ class ResearchResponse(BaseModel):
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
 parser = PydanticOutputParser(pydantic_object=ResearchResponse)
 
-# Research depth configurations
+# Strict length enforcement configurations
 DEPTH_CONFIGS = {
     "quick": {
-        "description": "brief 2-3 sentence summary highlighting only the main points",
-        "word_limit": 80
+        "description": "Ultra-concise summary. Maximum 3 sentences.",
+        "word_limit": "50-80"
     },
     "detailed": {
-        "description": "detailed 4-6 sentence explanation including context and examples",
-        "word_limit": 200
+        "description": "Comprehensive explanation with context. 2-3 paragraphs.",
+        "word_limit": "200-300"
     },
     "academic": {
-        "description": "6-10 sentence formal, academic-style summary, including citations to sources",
-        "word_limit": 400
+        "description": "In-depth formal analysis with citations. 4-5 paragraphs.",
+        "word_limit": "400-600"
     }
 }
 
 def get_system_message(depth="detailed"):
-    """Generate system message based on research depth."""
     config = DEPTH_CONFIGS.get(depth, DEPTH_CONFIGS["detailed"])
     
     return f"""
-You are an AI Research Assistant.
+You are an AI Research Assistant. Your goal is to answer the user's query with high accuracy and strict adherence to length constraints.
 
-Your task:
-1. Answer the user's question using **multiple sources**:
-   - Use the Wikipedia tool for factual grounding
-   - Use the Web Search tool for verification and current information
-2. Compare information from both sources:
-   - If facts match → confidence_score: 0.9-1.0 (HIGH)
-   - If partially match → confidence_score: 0.5-0.8 (MEDIUM)
-   - If conflicting → confidence_score: 0.1-0.4 (LOW)
-3. Research Depth: {depth.upper()}
-   - Provide a {config['description']}
-   - Target length: ~{config['word_limit']} words
-4. Always include tools_used and sources
-5. Only include facts supported by at least one source
-6. Be concise, clear, and structured
+### RESEARCH PROTOCOL:
+1. **Search**: Use `search` or `wikipedia` to gather facts.
+2. **Verify**: Cross-reference at least two sources.
+3. **Synthesize**: Create a final answer based on the {depth.upper()} depth.
 
-IMPORTANT: You are a ReAct agent. You must think step-by-step.
-When you have gathered enough information, you MUST output a "Final Answer".
-The "Final Answer" MUST be a valid JSON object strictly following this format:
+### STRICT OUTPUT REQUIREMENTS:
+- **Depth**: {depth.upper()} ({config['description']})
+- **Length**: MUST be between {config['word_limit']} words. Do NOT generate less or more.
+- **Format**: Return ONLY a valid JSON object. No markdown, no "Final Answer:" prefix, no "Thought:" trace in the final output.
+
+### JSON STRUCTURE:
 {{format_instructions}}
 
-Do not output the JSON schema definitions in your final answer. Only output the instance data.
-Do not add "Note:" or reflections after the JSON.
+### CRITICAL RULES:
+- If you have enough info, STOP searching and output the JSON immediately.
+- Do NOT output the schema or explanations.
+- The `summary` field MUST meet the word count requirement of {config['word_limit']} words.
 """
 
 tools = [search_tool, wiki_tool, save_tool]
-
-# Custom handle_parsing_errors function
-def handle_parsing_error(error):
-    """Fallback logic when the agent fails to parse the output."""
-    # Often the agent output is actually the Final Answer stuck in an Action block or malformed
-    response_str = str(error)
-    # Check if we can extract JSON from the error message itself if it contains the output
-    if "Could not parse LLM output" in response_str:
-        # The output is usually contained in the error message
-        return response_str
-    return "Agent encountered a parsing error. Please try again."
 
 agent = initialize_agent(
     tools, 
     llm, 
     agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
     verbose=True,
-    handle_parsing_errors=True, # LangChain's default handler tries to recover
-    max_iterations=5,
+    handle_parsing_errors=True,
+    max_iterations=4, # Reduced to prevent loops
     early_stopping_method="generate"
 )
 
-def extract_json_from_response(text):
-    """Try to extract JSON from various response formats."""
-    # Clean up the text
-    text = text.replace("```json", "").replace("```", "").strip()
-    
-    # Strategy 1: Look for the specific JSON structure we expect (ignoring schema)
-    # matching {"topic": ...}
-    
-    try:
-        # Find the last occurrence of "topic" to avoid picking up the schema definition
-        # if the schema is printed first.
-        # But a safer way is to use regex looks for values
-        
-        # Regex to find a JSON object containing "topic" and "summary"
-        # We use a non-greedy match for content
-        pattern = r'\{[^{}]*"topic"[^{}]*"summary"[^{}]*\}'
-        
-        # Search for all matches
-        matches = list(re.finditer(pattern, text, re.DOTALL))
-        
-        if matches:
-            # If multiple matches, the last one is likely the result, as schema usually comes first if echoed
-            # But let's check which one is valid
-            for match in reversed(matches):
-                try:
-                    candidate = match.group()
-                    data = json.loads(candidate)
-                    if "topic" in data and "confidence_score" in data:
-                        return data
-                except:
-                    continue
-    except:
-        pass
-        
-    # Strategy 2: Brute force JSON extraction
-    try:
-        # Find start and end braces
-        start_indices = [i for i, char in enumerate(text) if char == '{']
-        end_indices = [i for i, char in enumerate(text) if char == '}']
-        
-        if start_indices and end_indices:
-            # Try to match the outermost reasonable braces
-            # Usually the answer is at the end
-            last_end = end_indices[-1]
-            
-            # Try from the last start brace backwards
-            for start in reversed(start_indices):
-                if start < last_end:
-                    candidate = text[start : last_end + 1]
-                    try:
-                        data = json.loads(candidate)
-                        # Filter out schema definitions (they usually have "properties" or "type")
-                        if "properties" not in data and "topic" in data:
-                            return data
-                    except:
-                        continue
-    except:
-        pass
+def clean_json_text(text):
+    """Clean text to isolate the JSON part."""
+    start_idx = text.find('{')
+    end_idx = text.rfind('}')
+    if start_idx != -1 and end_idx != -1:
+         return text[start_idx : end_idx + 1]
+    return text
 
+def extract_json_from_response(text):
+    """Robustly extract JSON from text."""
+    cleaned_text = clean_json_text(text)
+    try:
+        return json.loads(cleaned_text)
+    except:
+        pass
+        
+    # Regex fallback
+    try:
+        topic_match = re.search(r'"topic":\s*"([^"]+)"', text)
+        summary_match = re.search(r'"summary":\s*"([^"]+)"', text)
+        if topic_match and summary_match:
+             return {
+                "topic": topic_match.group(1),
+                "summary": summary_match.group(1),
+                "sources": ["Extracted"],
+                "tools_used": ["search"],
+                "confidence_score": 0.5
+            }
+    except:
+        pass
     return None
 
 def run_agent(query, depth="detailed"):
-    """Run the research agent with specified depth and return structured response."""
     try:
         system_message = get_system_message(depth)
-        # We need to give the format instructions clearly
-        format_instructions = parser.get_format_instructions()
-        formatted_query = system_message.format(format_instructions=format_instructions) + f"\nUser Query: {query}"
+        formatted_query = system_message.format(format_instructions=parser.get_format_instructions()) + f"\nUser Query: {query}"
         
-        print(f"[DEBUG] Running agent with query: {query}, depth: {depth}")
-        
-        # Run the agent
-        # Because handle_parsing_errors=True, this should return a string even if parsing fails
+        print(f"[DEBUG] Running agent with query: {query} | Depth: {depth}")
         raw_response = agent.run(formatted_query)
         
-        print(f"[DEBUG] Raw response: {raw_response[:500]}...")
-        
-        # Clean up the response if it includes "Final Answer:" prefix from the agent output
+        # Clean response
         if "Final Answer:" in raw_response:
             raw_response = raw_response.split("Final Answer:", 1)[1].strip()
+        
+        raw_response = clean_json_text(raw_response)
 
-        # Try to parse with Pydantic first (cleanest)
         try:
             structured_response = parser.parse(raw_response)
             return {"result": structured_response.model_dump()}
-        except Exception:
-            # Fallback extraction
-            print("[DEBUG] Pydantic parse failed, attempting manual extraction...")
+        except:
             extracted = extract_json_from_response(raw_response)
             if extracted:
                 return {"result": extracted}
             
-            # Create graceful fallback
-            print("[DEBUG] Manual extraction failed, creating fallback response")
+            # Fallback
             return {
                 "result": {
                     "topic": query,
-                    "summary": f"Research completed but output format was irregular. Raw output summary: {raw_response[:200]}...",
-                    "sources": ["Agent Output"],
+                    "summary": f"Could not parse valid JSON. Raw output: {raw_response[:200]}...",
+                    "sources": ["System"],
                     "tools_used": ["search"],
-                    "confidence_score": 0.5
+                    "confidence_score": 0.0
                 }
             }
-            
+
     except Exception as e:
-        print(f"[ERROR] Agent error: {str(e)}")
-        # Check if it's a Groq deprecation error specifically
-        if "model `llama3-8b-8192` has been decommissioned" in str(e):
-             return {
-                "error": "Model deprecated. Please notify administrator to update the model in main.py.",
-                "raw_response": str(e)
-            }
-            
-        return {
-            "error": "An error occurred during research.", 
-            "raw_response": str(e)
-        }
+        print(f"[ERROR] {str(e)}")
+        return {"error": str(e), "raw_response": str(e)}

@@ -1,7 +1,7 @@
 flask
 flask-cors
 duckduckgo-search
-langchain
+langchain==0.1.16
 wikipedia
 langchain-community
 langchain-openai
