@@ -36,6 +36,7 @@ def ask():
 def health():
     return jsonify({"status": "ok"})
 
+
 if __name__ == '__main__':
     print("[INFO] Starting AI Research Agent server...")
     app.run(debug=True, host='0.0.0.0', port=5000)
